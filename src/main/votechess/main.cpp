@@ -59,7 +59,10 @@ int main() {
         irc_client.privmsg(fmt::format("Winning move: {}", best_move_str));
         libchess::UCIService::bestmove(best_move.to_str());
     };
-    auto stop_handler = []() { votechess::VoteService::get_stop_voting_signal_mutex().unlock(); };
+    auto stop_handler = [&cv]() {
+        votechess::VoteService::get_stop_voting_signal_mutex().unlock();
+        cv.notify_all();
+    };
 
     libchess::UCIService uci_service{"IRC VoteChess Bridge", "Manik Charan"};
     uci_service.register_position_handler(position_handler);
