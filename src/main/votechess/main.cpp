@@ -52,6 +52,8 @@ int main() {
         irc_client.privmsg(
             fmt::format("Voting has begun! Counting votes in {} seconds!", movetime));
         std::unique_lock lock{votechess::VoteService::get_stop_voting_signal_mutex()};
+
+        // FIXME: Wrap in a predicate loop to prevent spurious wakeup issues
         cv.wait_for(lock, boost::asio::chrono::seconds{movetime});
 
         libchess::Move best_move = vote_service->coalesce();
