@@ -62,6 +62,8 @@ std::optional<VoteService::ErrorType> VoteService::cast_vote(const std::string& 
 libchess::Move VoteService::coalesce() {
     // FIXME: Collect a list of max-voted moves and pick randomly from within.
     //        This will pick random move when no votes are cast as well.
+    std::lock_guard lock{mutex_};
+
     is_active_ = false;
     auto max_element_ptr = std::max_element(move_vote_hist_.begin(), move_vote_hist_.end());
     if (max_element_ptr == move_vote_hist_.end()) {
