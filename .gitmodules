@@ -1,3 +1,6 @@
 [submodule "tools/vcpkg"]
 	path = tools/vcpkg
 	url = https://github.com/microsoft/vcpkg
+[submodule "src/main/libchess"]
+	path = src/main/libchess
+	url = https://github.com/Mk-Chan/libchess

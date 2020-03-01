@@ -10,13 +10,15 @@ namespace votechess {
 class irc_client {
    public:
     irc_client(boost::asio::io_context& io_context, tcp::resolver::results_type& endpoints);
-    void writeln(std::string message);
+    void writeln(const std::string& message);
+    void privmsg(const std::string& message);
     void close();
 
    protected:
     void connect(const tcp::resolver::results_type& endpoints);
     void read();
     void login();
+    void handle_message(const std::string& message);
 
    private:
     boost::asio::io_context& io_context_;

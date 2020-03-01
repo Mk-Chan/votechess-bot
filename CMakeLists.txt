@@ -13,7 +13,7 @@ find_package(Boost REQUIRED)
 ###
 # Base directory relative includes for everyone
 ###
-include_directories(.)
+include_directories(src/main)
 ###
 
 ###
@@ -42,6 +42,7 @@ add_executable(
     votechess
     src/main/votechess/main.cpp
     src/main/votechess/irc_client.cpp
+    src/main/votechess/vote_service.cpp
 )
 target_link_libraries(votechess PRIVATE spdlog::spdlog)
 target_link_libraries(votechess INTERFACE Boost::Boost)
