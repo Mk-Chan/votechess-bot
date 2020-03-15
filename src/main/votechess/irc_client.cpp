@@ -1,17 +1,21 @@
+#include "irc_client.h"
+
 #include "boost/algorithm/string.hpp"
 
 #include "spdlog/spdlog.h"
 
-#include "irc_client.h"
-#include "vote_service.h"
+#include "config_service.h"
+#include "uci_service_wrapper.h"
 
 using boost::asio::ip::tcp;
 
 namespace votechess {
 
-irc_client::irc_client(boost::asio::io_context& io_context, tcp::resolver::results_type& endpoints)
-    : io_context_(io_context), socket_(io_context), input_buffer_() {
-    connect(endpoints);
+irc_client::irc_client(boost::asio::io_context& io_context)
+    : io_context_(io_context),
+      socket_(io_context),
+      input_buffer_(),
+      vote_service_(new vote_service()) {
 }
 
 void irc_client::close() {
@@ -38,9 +42,8 @@ void irc_client::writeln(const std::string& message) {
 }
 
 void irc_client::privmsg(const std::string& message) {
-    std::string privmsg_message = "PRIVMSG ##botdump :";
-    privmsg_message.append(message);
-    privmsg_message.append("\n");
+    config_service* config = config_service::singleton();
+    std::string privmsg_message = "PRIVMSG " + config->irc_channel() + " :" + message + "\n";
     boost::asio::post(io_context_, [this, privmsg_message]() {
         boost::asio::async_write(
             socket_,
@@ -72,36 +75,40 @@ void irc_client::connect(const tcp::resolver::results_type& endpoints) {
 }
 
 void irc_client::login() {
-    writeln("USER duderino_ chat.freenode.net duderino_ :duderino_ duderino_");
-    writeln("NICK duderino_");
-    writeln("JOIN ##botdump");
+    config_service* config = config_service::singleton();
+    std::string nick = config->irc_nick();
+    std::string host = config->irc_host();
+    writeln(fmt::format("USER {} {} {} :{} {}", nick, host, nick, nick, nick));
+    writeln(fmt::format("NICK {}", nick));
 }
 
 void irc_client::read() {
-    boost::asio::async_read_until(socket_,
-                                  input_buffer_,
-                                  "\r\n",
-                                  [this](boost::system::error_code ec, std::size_t /*length*/) {
-                                      if (ec) {
-                                          spdlog::warn("Error while reading: {}", ec.message());
-                                          socket_.close();
-                                          return;
-                                      }
+    boost::asio::async_read_until(
+        socket_,
+        input_buffer_,
+        "\r\n",
+        [this, irc = shared_from_this()](boost::system::error_code ec, std::size_t /*length*/) {
+            if (ec) {
+                spdlog::warn("Error while reading: {}", ec.message());
+                socket_.close();
+                return;
+            }
 
-                                      std::istream input_stream{&input_buffer_};
-                                      std::string message;
-                                      std::getline(input_stream, message);
+            std::istream input_stream{&input_buffer_};
+            std::string message;
+            std::getline(input_stream, message);
 
-                                      auto space_pos = message.find(' ');
-                                      if (message.substr(0, space_pos) == "PING") {
-                                          std::string pong = "PONG ";
-                                          pong.append(message.substr(space_pos + 1));
-                                          writeln(pong);
-                                      }
+            auto space_pos = message.find(' ');
+            if (message.substr(0, space_pos) == "PING") {
+                std::string pong = "PONG ";
+                pong.append(message.substr(space_pos + 1));
+                writeln(pong);
+            }
 
-                                      handle_message(message);
-                                      read();
-                                  });
+            boost::trim_right_if(message, boost::is_any_of("\n"));
+            handle_message(message);
+            irc->read();
+        });
 }
 
 bool is_valid_move_char(char c) {
@@ -127,9 +134,23 @@ void irc_client::handle_message(const std::string& message) {
     delim_pos = message.find(':', delim_pos);
     std::string_view privmsg_message{message.c_str() + delim_pos + 1};
 
-    if (privmsg_message.rfind(".newgame", 0) != std::string::npos) {
-        // TODO: start lichess-bot and open a pipe to this process
-        privmsg("Trying to start a new game...");
+    if (privmsg_message.rfind(".start", 0) != std::string::npos) {
+        auto session = [&]() {
+            while (true) {
+                spdlog::info("Waiting for lichess-bot...");
+                tcp::acceptor conn_acceptor{io_context_, tcp::endpoint{tcp::v4(), 12345}};
+                uci_service_wrapper uci_service{*vote_service_, *this};
+                conn_acceptor.accept(*uci_service.io_stream().rdbuf());
+
+                privmsg("Waiting for a game...");
+                auto err = uci_service.run();
+                if (err == uci_service_wrapper::error_code::UNINITIALIZED) {
+                    spdlog::error("Tried to run UCIService while uninitialized!");
+                }
+                privmsg("Game ended!");
+            }
+        };
+        std::thread{session}.detach();
     } else if (privmsg_message.rfind(".vote", 0) != std::string::npos) {
         std::string_view move_view = privmsg_message.substr(6);
         int move_size = move_view.size();
@@ -153,13 +174,12 @@ void irc_client::handle_message(const std::string& message) {
             return;
         }
 
-        VoteService* vote_service = VoteService::get_instance();
-        auto err = vote_service->cast_vote(std::string{nick}, *move);
-        if (err == VoteService::ErrorType::VOTING_INACTIVE) {
+        auto err = vote_service_->cast_vote(std::string{nick}, *move);
+        if (err == vote_service::error_code::VOTING_INACTIVE) {
             privmsg("Voting is not active right now!");
-        } else if (err == VoteService::ErrorType::ALREADY_VOTED) {
+        } else if (err == vote_service::error_code::ALREADY_VOTED) {
             privmsg(fmt::format("{} has already voted!", nick));
-        } else if (err == VoteService::ErrorType::ILLEGAL_MOVE) {
+        } else if (err == vote_service::error_code::ILLEGAL_MOVE) {
             privmsg(fmt::format("{} is an illegal move!", move->to_str()));
         }
     }

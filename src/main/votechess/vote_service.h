@@ -10,13 +10,11 @@
 #include "libchess/Move.h"
 #include "libchess/Position.h"
 
-#include "irc_client.h"
-
 namespace votechess {
 
-class VoteService {
+class vote_service {
    public:
-    enum class ErrorType
+    enum class error_code
     {
         ALREADY_VOTED,
         ILLEGAL_MOVE,
@@ -24,19 +22,19 @@ class VoteService {
         VOTING_INACTIVE,
     };
 
-    [[nodiscard]] static VoteService* get_instance();
-    [[nodiscard]] static std::mutex& get_stop_voting_signal_mutex();
+    explicit vote_service();
 
-    std::optional<ErrorType> new_vote(const libchess::Position& pos);
-    std::optional<ErrorType> cast_vote(const std::string& voter, libchess::Move move);
+    libchess::Color side_to_move();
+
+    void position(const libchess::Position& pos);
+    const libchess::Position& position() const;
+
+    std::optional<error_code> new_vote();
+    std::optional<error_code> cast_vote(const std::string& voter, libchess::Move move);
     libchess::Move coalesce();
 
    private:
-    explicit VoteService();
-
-    static VoteService* instance_;
-    static std::mutex stop_voting_signal_mutex_;
-
+    libchess::Position pos_;
     bool is_active_;
     std::mutex mutex_;
     std::vector<int> move_vote_hist_;

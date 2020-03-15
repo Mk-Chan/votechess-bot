@@ -3,19 +3,21 @@
 
 #include "boost/asio.hpp"
 
+#include "vote_service.h"
+
 using boost::asio::ip::tcp;
 
 namespace votechess {
 
-class irc_client {
+class irc_client : public std::enable_shared_from_this<irc_client> {
    public:
-    irc_client(boost::asio::io_context& io_context, tcp::resolver::results_type& endpoints);
+    explicit irc_client(boost::asio::io_context& io_context);
+    void connect(const tcp::resolver::results_type& endpoints);
     void writeln(const std::string& message);
     void privmsg(const std::string& message);
     void close();
 
    protected:
-    void connect(const tcp::resolver::results_type& endpoints);
     void read();
     void login();
     void handle_message(const std::string& message);
@@ -24,6 +26,7 @@ class irc_client {
     boost::asio::io_context& io_context_;
     tcp::socket socket_;
     boost::asio::streambuf input_buffer_;
+    std::unique_ptr<vote_service> vote_service_;
 };
 
 }  // namespace votechess

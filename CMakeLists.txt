@@ -43,6 +43,9 @@ add_executable(
     src/main/votechess/main.cpp
     src/main/votechess/irc_client.cpp
     src/main/votechess/vote_service.cpp
+    src/main/votechess/uci_service_wrapper.cpp
+    src/main/votechess/rng_service.cpp
+    src/main/votechess/config_service.cpp
 )
 target_link_libraries(votechess PRIVATE spdlog::spdlog)
 target_link_libraries(votechess INTERFACE Boost::Boost)
