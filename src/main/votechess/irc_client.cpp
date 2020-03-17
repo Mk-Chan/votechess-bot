@@ -12,7 +12,8 @@ using boost::asio::ip::tcp;
 namespace votechess {
 
 irc_client::irc_client(boost::asio::io_context& io_context)
-    : io_context_(io_context),
+    : started_(false),
+      io_context_(io_context),
       socket_(io_context),
       input_buffer_(),
       vote_service_(new vote_service()) {
@@ -135,6 +136,10 @@ void irc_client::handle_message(const std::string& message) {
     std::string_view privmsg_message{message.c_str() + delim_pos + 1};
 
     if (privmsg_message.rfind(".start", 0) != std::string::npos) {
+        if (started_) {
+            return;
+        }
+        started_ = true;
         auto session = [&]() {
             while (true) {
                 spdlog::info("Waiting for lichess-bot...");

@@ -23,6 +23,7 @@ class irc_client : public std::enable_shared_from_this<irc_client> {
     void handle_message(const std::string& message);
 
    private:
+    std::atomic_bool started_;
     boost::asio::io_context& io_context_;
     tcp::socket socket_;
     boost::asio::streambuf input_buffer_;
